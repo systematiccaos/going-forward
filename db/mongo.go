@@ -7,11 +7,13 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	// "github.com/kamva/mgm/v3"
 	// "git.sys-tem.org/caos/db4bigdata/internal/model"
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -71,20 +73,36 @@ func (mongo *Database) Drop(collectionName string) error {
 }
 
 // I would call this method import
-func (mongo *Database) Save(obj interface{}) error {
+func (mongo *Database) Save(obj interface{}, filter string) error {
 	t := getDirectTypeFromInterface(obj)
 	coll := mongo.db.Collection(getNestedElemName(t))
 	logrus.Println(getNestedElemName(t))
 	objs := getInterfaceSliceFromInterface(obj)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := coll.InsertMany(ctx, objs)
-	if err != nil {
-		logrus.Errorln("Error when inserting objects: ", err)
-		return err
-	}
+	opts := options.Update().SetUpsert(true)
 
-	logrus.Printf("Inserted %d documents for Collection %s", len(res.InsertedIDs), getNestedElemName(t))
+	if filter != "" {
+		for _, o := range objs {
+			// filterval := reflect.
+			update := bson.D{{"$set", o}}
+			filterval := getStructFieldByMongoFilterName(o, filter)
+			filterqry := bson.D{{filter, filterval}}
+			res, err := coll.UpdateOne(ctx, filterqry, update, opts)
+			if err != nil {
+				logrus.Errorln("Error when inserting objects: ", err)
+				return err
+			}
+			logrus.Printf("Updated %d documents for Collection %s", res.UpsertedCount, getNestedElemName(t))
+		}
+	} else {
+		res, err := coll.InsertMany(ctx, objs)
+		if err != nil {
+			logrus.Errorln("Error when inserting objects: ", err)
+			return err
+		}
+		logrus.Printf("Inserted %d documents for Collection %s", len(res.InsertedIDs), getNestedElemName(t))
+	}
 
 	return nil
 }
@@ -137,6 +155,13 @@ func (mongo *Database) Exec(qry string, inf interface{}) error {
 func (mongo *Database) Close() error {
 	err := mongo.conn.Disconnect(*mongo.context)
 	return err
+}
+
+func getStructFieldByMongoFilterName(inf interface{}, name string) interface{} {
+	strct := getDirectStructFromInterface(inf)
+	capname := strings.Title(name)
+	field := strct.FieldByName(capname)
+	return field.Interface()
 }
 
 func resolveStructFields(inf interface{}) []reflect.StructField {
