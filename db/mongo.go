@@ -93,7 +93,7 @@ func (mongo *Database) Save(obj interface{}, filter string) error {
 				logrus.Errorln("Error when inserting objects: ", err)
 				return err
 			}
-			logrus.Printf("Updated %d documents for Collection %s", res.UpsertedCount, getNestedElemName(t))
+			logrus.Printf("upserted %d documents for Collection %s, updated %d documents", res.UpsertedCount, getNestedElemName(t), res.ModifiedCount)
 		}
 	} else {
 		res, err := coll.InsertMany(ctx, objs)
