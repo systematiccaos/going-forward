@@ -55,6 +55,7 @@ func ConnectMongo() (*Database, error) {
 	defer cancel()
 	mongourl := os.Getenv("MONGO_CONNECTION")
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongourl))
+	logrus.Println(os.Getenv("MONGO_DB"))
 	db := &Database{client, client.Database(os.Getenv("MONGO_DB")), &ctx}
 	return db, err
 }
@@ -83,7 +84,7 @@ func (mongo *Database) Save(obj interface{}) error {
 		return err
 	}
 
-	logrus.Println("Inserted ", len(res.InsertedIDs), " documents for Collection \"", t.Name(), "\"")
+	logrus.Printf("Inserted %d documents for Collection %s", len(res.InsertedIDs), getNestedElemName(t))
 
 	return nil
 }
