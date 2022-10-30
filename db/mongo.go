@@ -1,9 +1,8 @@
+// This package acts as an extremely simple object document mapper for mongodb and manages basic functionality of mongodb.
 package db
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"reflect"
@@ -18,29 +17,33 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// contains the mongodb's URL, UserName and Password
 type MongoConfig struct {
 	URL      url.URL
 	UserName string
 	Password string
 }
 
+// knows the current connection to the mongodb, database and the current context.
 type Database struct {
 	conn    *mongo.Client
 	db      *mongo.Database
 	context *context.Context
 }
 
+// holds reflection of a struct as list of abstractStructField
 type abstractStructFieldSet struct {
 	fields []abstractStructField
 }
 
+// has key and reflect.Value of a structfield
 type abstractStructField struct {
 	key   string
 	value reflect.Value
 	tp    reflect.StructField
 }
 
-// This function is not tested
+// drops the current db and starts over from zero - use with caution
 func Initialize(mongo *Database) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -52,6 +55,7 @@ func Initialize(mongo *Database) bool {
 	return false
 }
 
+// connects to the configured mongodb and returns the connection
 func ConnectMongo() (*Database, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -62,6 +66,7 @@ func ConnectMongo() (*Database, error) {
 	return db, err
 }
 
+// drops a given doc
 func (mongo *Database) Drop(collectionName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -72,7 +77,7 @@ func (mongo *Database) Drop(collectionName string) error {
 	return nil
 }
 
-// I would call this method import
+// saves a new doc in mongo - decides on its own if it has to do an upsert or insert, by the given filter
 func (mongo *Database) Save(obj interface{}, filter string) error {
 	t := getDirectTypeFromInterface(obj)
 	coll := mongo.db.Collection(getNestedElemName(t))
@@ -107,12 +112,7 @@ func (mongo *Database) Save(obj interface{}, filter string) error {
 	return nil
 }
 
-// Migrate - does nothing here
-func (mongo *Database) Migrate(inf ...interface{}) error {
-	return fmt.Errorf("no implementation here")
-}
-
-// TODO: implement delete logic
+// deletes a given doc
 func (mongo *Database) Delete(obj interface{}) error {
 	t := getDirectTypeFromInterface(obj)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -128,7 +128,7 @@ func (mongo *Database) Delete(obj interface{}) error {
 	return nil
 }
 
-// Returns sql-Result
+// returns the first found doc by filter-query on a target struct
 func (mongo *Database) Find(qry interface{}, target interface{}) (*mongo.Cursor, error) {
 	t := getDirectTypeFromInterface(target)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -148,15 +148,13 @@ func (mongo *Database) Find(qry interface{}, target interface{}) (*mongo.Cursor,
 	return cursor, nil
 }
 
-func (mongo *Database) Exec(qry string, inf interface{}) error {
-	return errors.New("not implemented")
-}
-
+// closes the database connection
 func (mongo *Database) Close() error {
 	err := mongo.conn.Disconnect(*mongo.context)
 	return err
 }
 
+// gets the name of a filter by the given struct field
 func getStructFieldByMongoFilterName(inf interface{}, name string) interface{} {
 	strct := getDirectStructFromInterface(inf)
 	capname := strings.Title(name)
@@ -164,6 +162,7 @@ func getStructFieldByMongoFilterName(inf interface{}, name string) interface{} {
 	return field.Interface()
 }
 
+// gets all fields of the given struct as a slice
 func resolveStructFields(inf interface{}) []reflect.StructField {
 	strct := getDirectTypeFromInterface(inf)
 	fields := []reflect.StructField{}
@@ -173,6 +172,7 @@ func resolveStructFields(inf interface{}) []reflect.StructField {
 	return fields
 }
 
+// returns an abstractStructFieldSet by a given type
 func getAsAbstractStructFieldSetFromInterface(inf interface{}) abstractStructFieldSet {
 	fields := resolveStructFields(inf)
 	afs := abstractStructFieldSet{}
@@ -187,6 +187,7 @@ func getAsAbstractStructFieldSetFromInterface(inf interface{}) abstractStructFie
 	return afs
 }
 
+// gets all nested element names as string
 func getNestedElemName(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Array:
@@ -200,6 +201,7 @@ func getNestedElemName(t reflect.Type) string {
 	}
 }
 
+// returns a direct handler if a pointer or other indirect was given - if it is already a direct handler, the same is returned
 func getDirectTypeFromInterface(inf interface{}) reflect.Type {
 	var tp reflect.Type
 	t := reflect.TypeOf(inf)
@@ -211,6 +213,7 @@ func getDirectTypeFromInterface(inf interface{}) reflect.Type {
 	return tp
 }
 
+// gets a direct handler if the given interface is a pointer
 func getDirectStructFromInterface(inf interface{}) reflect.Value {
 	var strct reflect.Value
 	t := reflect.TypeOf(inf)
@@ -222,6 +225,7 @@ func getDirectStructFromInterface(inf interface{}) reflect.Value {
 	return strct
 }
 
+// returns a slice of pointers to interfaces if the given type was an array or slice
 func getInterfacePointerSliceFromInterface(inf interface{}) []interface{} {
 	v := getDirectStructFromInterface(inf)
 	var objs []interface{}
@@ -235,6 +239,7 @@ func getInterfacePointerSliceFromInterface(inf interface{}) []interface{} {
 	return objs
 }
 
+// returns a slice of interfaces if the given type was an array or slice
 func getInterfaceSliceFromInterface(inf interface{}) []interface{} {
 	v := getDirectStructFromInterface(inf)
 	var objs []interface{}
