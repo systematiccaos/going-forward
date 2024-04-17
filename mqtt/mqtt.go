@@ -3,6 +3,7 @@ package mqtt
 
 import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 // wraps the mqtt-connection
@@ -17,13 +18,17 @@ type MQTTSubscriptionMessage struct {
 }
 
 // connects to the broker and returns errors if there are any
-func (cl *Client) Connect(broker string, client_id string, user string, password string, set_clean_session bool) error {
+func (cl *Client) Connect(broker string, client_id string, user string, password string, set_clean_session bool, connection_lost_handler mqtt.ConnectionLostHandler) error {
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(broker)
 	opts.SetClientID(client_id)
 	opts.SetUsername(user)
 	opts.SetPassword(password)
 	opts.SetCleanSession(set_clean_session)
+	if connection_lost_handler == nil {
+		connection_lost_handler = mqtt.DefaultConnectionLostHandler
+	}
+	opts.OnConnectionLost = connection_lost_handler
 	cl.conn = MQTT.NewClient(opts)
 	if tk := cl.conn.Connect(); tk.Wait() && tk.Error() != nil {
 		return tk.Error()
